@@ -1,6 +1,6 @@
 {
     "modelo": "trivial",
-    "fecha_creacion": "2026-10-17 15:25:15",
+    "fecha_creacion": "2026-10-17 17:03:13",
     "datos_entrenamiento": "Online Shoppers Intention (70% train, 15% val, 15% test)",
     "parametros": {
         "constant": null,
