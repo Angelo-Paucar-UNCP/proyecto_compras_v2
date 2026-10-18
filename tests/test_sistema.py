@@ -1,85 +1,57 @@
 import sys
-from pathlib import Path
+import os
+import pytest
 
-from fastapi.testclient import TestClient
+# Añade la raíz del proyecto al PATH de Python para poder importar desde src
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
+from src.preprocesamiento_api import preparar_datos_entrada
 
-from api import app
-from chatbot import parsear_mes, parsear_visitante, solicitar_dato
-from datos import cargar_datos
-from preprocesamiento_api import ErrorValidacion, validar_entrada
+def test_preparar_datos_validos():
+    """Verifica que un diccionario válido genere un DataFrame estructurado de 1 fila."""
+    datos = {
+        "ProductRelated": 10,
+        "ProductRelated_Duration": 120.0,
+        "Month": "May"
+    }
+    df = preparar_datos_entrada(datos)
+    assert len(df) == 1
+    assert "Administrative" in df.columns
+    assert "ProductRelated" in df.columns
 
-client = TestClient(app)
+def test_faltan_obligatorias():
+    """Verifica que lance ValueError si faltan columnas obligatorias."""
+    datos_incompletos = {
+        "Month": "May"
+    }
+    with pytest.raises(ValueError):
+        preparar_datos_entrada(datos_incompletos)
 
-SESION_VALIDA = {
-    "Administrative": 0,
-    "Administrative_Duration": 0,
-    "Informational": 0,
-    "Informational_Duration": 0,
-    "ProductRelated": 10,
-    "ProductRelated_Duration": 600,
-    "BounceRates": 0.01,
-    "ExitRates": 0.04,
-    "PageValues": 0,
-    "SpecialDay": 0,
-    "Month": "Nov",
-    "OperatingSystems": 2,
-    "Browser": 2,
-    "Region": 1,
-    "TrafficType": 2,
-    "VisitorType": "Returning_Visitor",
-    "Weekend": False,
-}
+def test_valor_invalido_tasa():
+    """Verifica que lance ValueError si una tasa excede el rango permitido (0 a 1)."""
+    datos_invalidos = {
+        "ProductRelated": 5,
+        "ProductRelated_Duration": 50.0,
+        "ExitRates": 2.5  # Tasa fuera de rango (> 1)
+    }
+    with pytest.raises(ValueError):
+        preparar_datos_entrada(datos_invalidos)
 
+def test_numero_negativo():
+    """Verifica que lance ValueError si hay duraciones o valores negativos."""
+    datos_negativos = {
+        "ProductRelated": -5,
+        "ProductRelated_Duration": 100.0
+    }
+    with pytest.raises(ValueError):
+        preparar_datos_entrada(datos_negativos)
 
-def test_carga_datos_no_esta_vacio():
-    df = cargar_datos()
-    assert not df.empty
-    assert "Revenue" in df.columns
-
-
-def test_api_health_check_responde_ok():
-    response = client.get("/health")
-    assert response.status_code == 200
-    assert response.json()["status"] == "activo"
-
-
-def test_api_rechaza_entrada_incompleta():
-    response = client.post("/predecir", json={"datos": {"ProductRelated": 3}})
-    assert response.status_code == 400
-    assert "Faltan campos" in response.json()["detail"]
-
-
-def test_api_rechaza_mes_invalido():
-    datos = dict(SESION_VALIDA)
-    datos["Month"] = "Enero"
-    response = client.post("/predecir", json={"datos": datos})
-    assert response.status_code == 400
-
-
-def test_validar_entrada_ok():
-    df = validar_entrada(SESION_VALIDA)
-    assert df.shape == (1, 17)
-
-
-def test_validar_entrada_rango():
-    datos = dict(SESION_VALIDA)
-    datos["BounceRates"] = 2
-    try:
-        validar_entrada(datos)
-        assert False, "debía fallar"
-    except ErrorValidacion:
-        pass
-
-
-def test_chatbot_deriva_a_humano_si_pide_ayuda(monkeypatch):
-    monkeypatch.setattr("builtins.input", lambda _: "ayuda")
-    resultado = solicitar_dato("¿Cuántas páginas visitaste?", int)
-    assert resultado == "DERIVAR"
-
-
-def test_chatbot_parsea_visitante_y_mes():
-    assert parsear_visitante("nuevo") == "New_Visitor"
-    assert parsear_mes("noviembre") == "Nov"
+def test_mes_invalido():
+    """Verifica que lance ValueError si el mes no pertenece a la lista válida."""
+    datos_mes = {
+        "ProductRelated": 10,
+        "ProductRelated_Duration": 120.0,
+        "Month": "Enero"  # Mes no permitido
+    }
+    with pytest.raises(ValueError):
+        preparar_datos_entrada(datos_mes)

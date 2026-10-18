@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import joblib
 
@@ -47,7 +48,32 @@ def preparar_datos_entrada(datos):
 
     return pd.DataFrame([d])[list(DEFAULTS)]
 
-def transformar_entrada(datos_json, preprocessor_path='modelos/preprocesador.joblib'):
+def buscar_preprocesador():
+    """Busca el archivo del preprocesador en la carpeta modelos/."""
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    candidatos = [
+        "modelos/preprocesador.joblib",
+        "modelos/preprocesador_scaler.joblib",
+        "modelos/scaler.joblib"
+    ]
+    for rel_path in candidatos:
+        full_path = os.path.join(base_dir, rel_path)
+        if os.path.exists(full_path):
+            return full_path
+        if os.path.exists(rel_path):
+            return rel_path
+    
+    modelos_dir = os.path.join(base_dir, "modelos")
+    if os.path.exists(modelos_dir):
+        for f in os.listdir(modelos_dir):
+            if "preprocesador" in f and f.endswith(".joblib"):
+                return os.path.join(modelos_dir, f)
+    return "modelos/preprocesador.joblib"
+
+def transformar_entrada(datos_json, preprocessor_path=None):
     df = preparar_datos_entrada(datos_json)
+    if preprocessor_path is None or not os.path.exists(preprocessor_path):
+        preprocessor_path = buscar_preprocesador()
+    
     preprocessor = joblib.load(preprocessor_path)
     return preprocessor.transform(df)

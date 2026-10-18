@@ -1,79 +1,78 @@
+import os
 import sys
-import os
-# Añade la carpeta actual (src) al path de Python para evitar errores de importación
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from preprocesamiento_api import transformar_entrada
-
-import os
 import joblib
+import numpy as np
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
-from typing import Optional, Any, Dict
+from typing import Any, Dict
 
-# Importar preprocesamiento con fallback para ejecuciones desde raíz o módulo src
-try:
-    from src.preprocesamiento_api import transformar_entrada
-except ImportError:
-    from preprocesamiento_api import transformar_entrada
+# Agregar la raíz del proyecto al PATH para importar desde src
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
+
+from src.preprocesamiento_api import transformar_entrada
 
 app = FastAPI(
     title="API REST - Intención de Compra en Línea",
-    description="Servicio web para predecir la probabilidad de compra de un usuario usando Redes Neuronales.",
     version="1.0.0"
 )
 
-# Cargar el modelo promovido al iniciar el servicio
-RUTA_MODELO = "modelos/red_neuronal_v2.joblib"
-if not os.path.exists(RUTA_MODELO):
-    # Intentar con nombre alternativo si se usa modelo_promovido.joblib
-    if os.path.exists("modelos/modelo_promovido.joblib"):
-        RUTA_MODELO = "modelos/modelo_promovido.joblib"
+def buscar_modelo():
+    directorios = [os.path.join(BASE_DIR, "modelos"), "modelos", "."]
+    extensiones = [".joblib", ".pkl"]
+    for d in directorios:
+        if os.path.exists(d):
+            for f in os.listdir(d):
+                if any(f.endswith(ext) for ext in extensiones) and "preprocesador" not in f and "scaler" not in f:
+                    return os.path.join(d, f)
+    return None
 
-modelo = None
-if os.path.exists(RUTA_MODELO):
-    modelo = joblib.load(RUTA_MODELO)
+RUTA_MODELO = buscar_modelo()
+modelo = joblib.load(RUTA_MODELO) if RUTA_MODELO and os.path.exists(RUTA_MODELO) else None
 
 @app.get("/")
 @app.get("/salud")
 def verificar_salud():
-    """
-    Endpoint de verificación de estado de la API (Healthcheck - E5).
-    """
-    estado_modelo = "Cargado" if modelo is not None else "No encontrado en modelos/"
+    global modelo, RUTA_MODELO
+    if modelo is None:
+        RUTA_MODELO = buscar_modelo()
+        if RUTA_MODELO and os.path.exists(RUTA_MODELO):
+            modelo = joblib.load(RUTA_MODELO)
+
     return {
         "estado": "OK",
         "servicio": "API REST Intención de Compra",
-        "modelo": estado_modelo
+        "modelo": f"Cargado ({os.path.basename(RUTA_MODELO)})" if modelo is not None else "No encontrado en modelos/"
     }
 
 @app.post("/predict")
 def predecir(payload: Dict[str, Any]):
-    """
-    Endpoint para realizar predicciones de intención de compra (E5).
-    Acepta solicitudes JSON parciales o completas y retorna la probabilidad calculada.
-    """
-    global modelo
+    global modelo, RUTA_MODELO
     if modelo is None:
-        if os.path.exists(RUTA_MODELO):
+        RUTA_MODELO = buscar_modelo()
+        if RUTA_MODELO and os.path.exists(RUTA_MODELO):
             modelo = joblib.load(RUTA_MODELO)
-        else:
-            raise HTTPException(
-                status_code=500,
-                detail="Modelo no disponible. Asegúrate de haber ejecutado src/modelo.py primero."
-            )
+
+    if modelo is None:
+        raise HTTPException(
+            status_code=500, 
+            detail="Modelo no encontrado en 'modelos/'. Ejecuta 'python src/modelo.py' para generarlo."
+        )
 
     try:
-        # Preprocesar entrada y validar con defensas
         X_proc = transformar_entrada(payload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error en preprocesamiento: {str(e)}")
 
-        # Calcular probabilidades e inferencia
+    try:
         if hasattr(modelo, "predict_proba"):
-            probabilidades = modelo.predict_proba(X_proc)[0]
-            prob_compra = float(probabilidades[1]) if len(probabilidades) > 1 else float(probabilidades[0])
+            probs = modelo.predict_proba(X_proc)
+            prob_compra = float(np.asarray(probs).ravel()[-1])
         else:
-            # Fallback si el modelo solo tiene predict
-            pred = modelo.predict(X_proc)[0]
-            prob_compra = float(pred)
+            pred = modelo.predict(X_proc)
+            prob_compra = float(np.asarray(pred).ravel())
 
         prediccion = 1 if prob_compra >= 0.5 else 0
 
@@ -82,13 +81,8 @@ def predecir(payload: Dict[str, Any]):
             "probabilidad_compra": round(prob_compra, 4),
             "mensaje": "Intención de compra ALTA" if prediccion == 1 else "Intención de compra BAJA"
         }
-
-    except ValueError as e:
-        # Captura errores de validación (columnas inválidas, rangos incorrectos) y retorna 400
-        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        # Captura cualquier otro error interno y retorna 500
-        raise HTTPException(status_code=500, detail=f"Error interno durante la inferencia: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error de inferencia: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

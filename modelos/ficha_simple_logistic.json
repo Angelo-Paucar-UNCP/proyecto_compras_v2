@@ -1,6 +1,6 @@
 {
     "modelo": "simple_logistic",
-    "fecha_creacion": "2026-10-18 16:38:42",
+    "fecha_creacion": "2026-10-18 18:46:35",
     "datos_entrenamiento": "Online Shoppers Intention (70% train, 15% val, 15% test)",
     "umbral_decision": 0.55,
     "parametros": {
