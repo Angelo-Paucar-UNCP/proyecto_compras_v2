@@ -55,17 +55,7 @@ Flujo en `docs/flujo_chatbot.png`. Recolecta slots (visitante, páginas de produ
 
 El modelo usa región, sistema operativo y tipo de tráfico, que pueden correlacionar con contexto socioeconómico. No usamos sexo ni salud. Un cupón automático puede resultar inequitativo si el error no es uniforme entre grupos (p. ej. visitante nuevo vs recurrente): conviene medir recall por `VisitorType` y `Weekend` en un trabajo futuro. `PageValues=0` por defecto en el chatbot subestima a quien ya vio páginas de alto valor. Los datos son de 2018 y un sitio concreto; no se deben tratar como universal. El sistema no sustituye a un asesor en quejas o pagos.
 
-## 8. Contribución de cada integrante
-
-Completar con nombres reales del grupo 5 antes de entregar:
-
-- Integrante A: datos, exploración y notebook.
-- Integrante B: modelos, umbral y fichas.
-- Integrante C: API y pruebas.
-- Integrante D: chatbot, diagrama e informe.
-
-El historial de GitHub debe coincidir con este reparto.
-
++
 ## Declaración de uso de herramientas de IA
 
 Se usó Cursor (asistente de código) para estructurar el repositorio, validar entradas de la API, el pipeline de umbral y el diagrama del chatbot. Se verificó a mano: descarga UCI, columnas reales, que el test no se usa para elegir modelo, respuestas 400, y el flujo del chatbot con frases inválidas. Las métricas que se reportan son las que imprime `python entrenar.py`.
