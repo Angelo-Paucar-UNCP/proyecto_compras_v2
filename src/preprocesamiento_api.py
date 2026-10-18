@@ -1,4 +1,5 @@
 import pandas as pd
+import joblib
 
 DEFAULTS = {
     'Administrative': 0, 'Administrative_Duration': 0.0,
@@ -9,10 +10,10 @@ DEFAULTS = {
     'Browser': 1, 'Region': 1, 'TrafficType': 1,
     'VisitorType': 'Returning_Visitor', 'Weekend': False,
 }
-OBLIGATORIAS = ['ProductRelated', 'ProductRelated_Duration']  # las que sí pregunta el chatbot
+OBLIGATORIAS = ['ProductRelated', 'ProductRelated_Duration']
 MESES = {'Feb','Mar','May','June','Jul','Aug','Sep','Oct','Nov','Dec'}
 VISITANTES = {'Returning_Visitor','New_Visitor','Other'}
-TASAS = ['BounceRates','ExitRates','SpecialDay']  # van de 0 a 1
+TASAS = ['BounceRates','ExitRates','SpecialDay']
 
 def preparar_datos_entrada(datos):
     if not isinstance(datos, dict):
@@ -45,3 +46,8 @@ def preparar_datos_entrada(datos):
         raise ValueError("'Weekend' debe ser true o false.")
 
     return pd.DataFrame([d])[list(DEFAULTS)]
+
+def transformar_entrada(datos_json, preprocessor_path='modelos/preprocesador.joblib'):
+    df = preparar_datos_entrada(datos_json)
+    preprocessor = joblib.load(preprocessor_path)
+    return preprocessor.transform(df)

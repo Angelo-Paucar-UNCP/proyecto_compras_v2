@@ -1,0 +1,5 @@
+{
+    "modelo": "simple_logistic",
+    "umbral": 0.55,
+    "criterio": "F1 en validación (clase positiva = compra)"
+}

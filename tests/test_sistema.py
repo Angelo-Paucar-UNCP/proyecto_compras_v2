@@ -1,32 +1,85 @@
 import sys
 from pathlib import Path
+
 from fastapi.testclient import TestClient
 
-# Agregamos la carpeta src/ al sistema para poder importar tus archivos
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
 
-from datos import cargar_datos
 from api import app
-from chatbot import solicitar_dato
+from chatbot import parsear_mes, parsear_visitante, solicitar_dato
+from datos import cargar_datos
+from preprocesamiento_api import ErrorValidacion, validar_entrada
 
-# Cliente de pruebas para simular peticiones web a la API sin encenderla
 client = TestClient(app)
 
-# 1. Prueba de Datos
+SESION_VALIDA = {
+    "Administrative": 0,
+    "Administrative_Duration": 0,
+    "Informational": 0,
+    "Informational_Duration": 0,
+    "ProductRelated": 10,
+    "ProductRelated_Duration": 600,
+    "BounceRates": 0.01,
+    "ExitRates": 0.04,
+    "PageValues": 0,
+    "SpecialDay": 0,
+    "Month": "Nov",
+    "OperatingSystems": 2,
+    "Browser": 2,
+    "Region": 1,
+    "TrafficType": 2,
+    "VisitorType": "Returning_Visitor",
+    "Weekend": False,
+}
+
+
 def test_carga_datos_no_esta_vacio():
     df = cargar_datos()
-    assert not df.empty, "El dataset no debería estar vacío"
+    assert not df.empty
+    assert "Revenue" in df.columns
 
-# 2. Prueba de API
+
 def test_api_health_check_responde_ok():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "activo"
 
-# 3. Prueba de Chatbot (Usa monkeypatch para simular que un usuario escribe)
+
+def test_api_rechaza_entrada_incompleta():
+    response = client.post("/predecir", json={"datos": {"ProductRelated": 3}})
+    assert response.status_code == 400
+    assert "Faltan campos" in response.json()["detail"]
+
+
+def test_api_rechaza_mes_invalido():
+    datos = dict(SESION_VALIDA)
+    datos["Month"] = "Enero"
+    response = client.post("/predecir", json={"datos": datos})
+    assert response.status_code == 400
+
+
+def test_validar_entrada_ok():
+    df = validar_entrada(SESION_VALIDA)
+    assert df.shape == (1, 17)
+
+
+def test_validar_entrada_rango():
+    datos = dict(SESION_VALIDA)
+    datos["BounceRates"] = 2
+    try:
+        validar_entrada(datos)
+        assert False, "debía fallar"
+    except ErrorValidacion:
+        pass
+
+
 def test_chatbot_deriva_a_humano_si_pide_ayuda(monkeypatch):
-    # Simulamos que el usuario teclea "ayuda"
-    monkeypatch.setattr('builtins.input', lambda _: 'ayuda')
-    resultado = solicitar_dato("¿Cuántas páginas visitaste?")
-    
-    assert resultado == "DERIVAR", "El chatbot debe derivar si el usuario pide ayuda"
+    monkeypatch.setattr("builtins.input", lambda _: "ayuda")
+    resultado = solicitar_dato("¿Cuántas páginas visitaste?", int)
+    assert resultado == "DERIVAR"
+
+
+def test_chatbot_parsea_visitante_y_mes():
+    assert parsear_visitante("nuevo") == "New_Visitor"
+    assert parsear_mes("noviembre") == "Nov"
