@@ -3,46 +3,61 @@ import time
 
 API_URL = "http://127.0.0.1:8000/predecir"
 
-def solicitar_dato(mensaje, tipo_esperado=int, fallback="Disculpa, no entendí eso. ¿Podrías ingresar solo el número?"):
-    """Recolecta datos paso a paso (slots) manejando errores (fallback)."""
+def solicitar_dato(mensaje, tipo_esperado=int, fallback="Disculpa, no entendí eso. ¿Podrías ingresar solo un número válido?"):
+    """
+    Recolecta datos paso a paso (slots) con validación de entradas 
+    y límite de reintentos (fallback).
+    """
     intentos = 0
     while intentos < 3:
         entrada = input(f"🤖 Asistente: {mensaje}\n👤 Tú: ")
         
         # Opción de salida o derivación humana directa
-        if entrada.lower() in ['ayuda', 'humano', 'asesor', 'salir']:
+        if entrada.strip().lower() in ['ayuda', 'humano', 'asesor', 'salir']:
             return "DERIVAR"
             
         try:
-            # Intentar convertir al tipo de dato esperado
             valor = tipo_esperado(entrada)
             return valor
         except ValueError:
             print(f"🤖 Asistente: {fallback}")
             intentos += 1
             
-    print("🤖 Asistente: Parece que estamos teniendo problemas de comunicación. Te pasaré con un asesor humano.")
+    print("\n🤖 Asistente: Parece que estamos teniendo problemas de comunicación. Te transferiré con un asesor humano para ayudarte mejor.")
     return "DERIVAR"
 
+def derivar_a_humano():
+    """Simula la transferencia a un operador de soporte humano."""
+    print("\n" + "-"*60)
+    print("📞 TRANSFIRIENDO A UN ASESOR HUMANO EN VIVO...")
+    print("👩🏽‍💻 Asesor real: ¡Hola! Soy el asesor de ventas. ¿En qué te puedo colaborar hoy?")
+    print("-" * 60 + "\n")
+
 def iniciar_conversacion():
-    print("\n" + "="*50)
-    print("🤖 Asistente: ¡Hola! Soy tu asistente virtual de la tienda.")
-    print("🤖 Asistente: Estoy aquí para ayudarte a encontrar lo que buscas o conectarte con un experto.")
-    print("🤖 Asistente: (Escribe 'ayuda' en cualquier momento para hablar con un humano)")
-    print("="*50 + "\n")
+    print("\n" + "="*60)
+    print("🤖 Asistente: ¡Hola! Bienvenid@ a nuestra tienda virtual.")
+    print("🤖 Asistente: Estoy aquí para ayudarte en tu compra.")
+    print("🤖 Asistente: (Recuerda que puedes escribir 'ayuda' en cualquier momento).")
+    print("="*60 + "\n")
     
-    # Recolección paso a paso (Slots)
-    # NOTA: Estas preguntas deben mapearse a las columnas numéricas/categóricas de tu dataset real
-    paginas_vistas = solicitar_dato("¿Cuántas páginas de productos has mirado hoy?")
-    if paginas_vistas == "DERIVAR": return derivar_a_humano()
+    # 1. Recolección de datos por pasos (Slots)
+    paginas_vistas = solicitar_dato("¿Cuántas páginas de productos has visitado hoy?")
+    if paginas_vistas == "DERIVAR":
+        derivar_a_humano()
+        return
         
-    minutos = solicitar_dato("¿Aproximadamente cuántos minutos llevas navegando en nuestra web?")
-    if minutos == "DERIVAR": return derivar_a_humano()
+    minutos = solicitar_dato("¿Aproximadamente cuántos minutos llevas navegando en nuestro sitio?", tipo_esperado=float)
+    if minutos == "DERIVAR":
+        derivar_a_humano()
+        return
     
-    # Construir el diccionario con los datos EXACTOS que tu preprocesador espera
-    # Rellena el resto de columnas con valores por defecto (moda/mediana) si el chatbot no las pregunta
+    # 2. Estructura de datos alineada al preprocesador y modelo entrenado (UCI Shoppers)
     datos_cliente = {
-        "ProductRelated": paginas_vistas,
+        "Administrative": 0,
+        "Administrative_Duration": 0.0,
+        "Informational": 0,
+        "Informational_Duration": 0.0,
+        "ProductRelated": int(paginas_vistas),
         "ProductRelated_Duration": float(minutos),
         "BounceRates": 0.0,
         "ExitRates": 0.0,
@@ -55,38 +70,43 @@ def iniciar_conversacion():
         "TrafficType": 1,
         "VisitorType": "Returning_Visitor",
         "Weekend": False
-        # Ajusta estas claves a las columnas exactas que quedaron en tu dataset después de la limpieza
     }
     
-    print("\n🤖 Asistente: Dame un segundito, estoy revisando el sistema...")
-    time.sleep(1.5)
+    print("\n🤖 Asistente: Consultando el estado de tu sesión...")
+    time.sleep(1)
     
-    # Consumir la API
+    # 3. Consulta a la API
     try:
-        respuesta = requests.post(API_URL, json={"datos": datos_cliente})
+        respuesta = requests.post(API_URL, json={"datos": datos_cliente}, timeout=5)
+        
         if respuesta.status_code == 200:
             resultado = respuesta.json()
+            prediccion = resultado.get("prediccion")
             
-            # Lógica de negocio basada en la predicción de la API
-            if resultado['prediccion'] == 0: # Predicción de abandono
-                print("🤖 Asistente: Veo que llevas un rato mirando. ¡Tengo un cupón del 15% de descuento solo para ti si finalizas tu compra hoy!")
-                print("🤖 Asistente: ¿Te gustaría que un asesor te ayude a aplicarlo?")
-                derivar_a_humano()
+            # Lógica de Lead Scoring e Intervención Proactiva
+            if prediccion == 0 and float(minutos) > 5.0:
+                print("🤖 Asistente: Veo que llevas un buen rato explorando nuestros productos. ¡Tengo una excelente noticia!")
+                print("🤖 Asistente: Te he otorgado un cupón exclusivo del 15% de descuento en tu carrito si completas tu pedido ahora.")
+                
+                # Novedad: Ahora sí espera tu respuesta
+                respuesta_usuario = input("🤖 Asistente: ¿Deseas que te transfiera con un asesor para aplicar el cupón? (sí/no)\n👤 Tú: ").strip().lower()
+                
+                if respuesta_usuario in ['si', 'sí', 's', 'yes', 'claro']:
+                    derivar_a_humano()
+                else:
+                    print("🤖 Asistente: Entendido. ¡El cupón quedará guardado por si cambias de opinión! Sigue disfrutando de nuestra tienda. ¡Hasta pronto!")
+                    
+            elif prediccion == 0:
+                print("🤖 Asistente: ¿Buscas algún producto en especial? Te invito a revisar nuestras promociones destacadas.")
             else:
-                print("🤖 Asistente: ¡Genial! Tus productos seleccionados son excelentes. ¿Te ayudo a ir a la caja?")
+                print("🤖 Asistente: ¡Genial! Tus productos seleccionados tienen excelente disponibilidad. ¿Te ayudo a dirigirte a la pasarela de pago?")
         else:
-            print("🤖 Asistente: Uy, mi sistema interno está un poco lento hoy. Te comunicaré con mi compañero humano.")
+            print(f"🤖 Asistente: No pude verificar tu carrito correctamente (Código HTTP {respuesta.status_code}).")
             derivar_a_humano()
             
-    except requests.exceptions.ConnectionError:
-        print("🤖 Asistente: (Error) No puedo conectar con mi cerebro (API apagada). Te pasaré con un humano.")
-
-def derivar_a_humano():
-    """Derivación a una persona de soporte."""
-    print("\n" + "-"*50)
-    print("📞 TRANSFIRIENDO A UN ASESOR HUMANO...")
-    print("👩🏽‍💻 Asesor real: ¡Hola! Soy el asesor de ventas. ¿En qué te puedo ayudar?")
-    print("-"*50 + "\n")
+    except requests.exceptions.RequestException:
+        print("🤖 Asistente: Ocurrió un inconveniente al conectar con el servidor interno.")
+        derivar_a_humano()
 
 if __name__ == "__main__":
     iniciar_conversacion()
