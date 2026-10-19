@@ -107,14 +107,6 @@ def iniciar_conversacion():
     except requests.exceptions.RequestException:
         print("🤖 Asistente: Ocurrió un inconveniente al conectar con el servidor interno.")
         derivar_a_humano()
-<<<<<<< HEAD
-=======
-
-if __name__ == "__main__":
-    iniciar_conversacion()
-
->>>>>>> e79bed5aa8c6377e3b5f3871b948f1b36665b26c
->>>>>>> dc8453a43d223cd7e12ad1b822e29a645900ecda
 
 if __name__ == "__main__":
     iniciar_conversacion()
