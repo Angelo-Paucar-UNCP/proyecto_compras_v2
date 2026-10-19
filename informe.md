@@ -53,7 +53,31 @@ Flujo en `docs/flujo_chatbot.png`. Recolecta slots (visitante, páginas de produ
 
 ## 7. Limitaciones y ética
 
-El modelo usa región, sistema operativo y tipo de tráfico, que pueden correlacionar con contexto socioeconómico. No usamos sexo ni salud. Un cupón automático puede resultar inequitativo si el error no es uniforme entre grupos (p. ej. visitante nuevo vs recurrente): conviene medir recall por `VisitorType` y `Weekend` en un trabajo futuro. `PageValues=0` por defecto en el chatbot subestima a quien ya vio páginas de alto valor. Los datos son de 2018 y un sitio concreto; no se deben tratar como universal. El sistema no sustituye a un asesor en quejas o pagos.
+### 7.1. Limitaciones del modelo
+
+El modelo se ha desarrollado utilizando el conjunto de datos *Online Shoppers Purchasing Intention Dataset*, publicado en 2018. Por ello, sus resultados pueden no representar el comportamiento actual de todos los usuarios de comercio electrónico ni generalizarse a otras plataformas. Antes de utilizarlo en un entorno real, sería necesario evaluar su rendimiento con datos recientes del sitio web donde se implementaría.
+
+Además, el modelo puede cometer falsos positivos y falsos negativos. Un falso positivo puede ocasionar que se ofrezca un cupón innecesario, mientras que un falso negativo puede impedir que se ofrezca un incentivo a un visitante que lo habría necesitado. La elección del umbral busca equilibrar estos errores mediante las métricas definidas para el proyecto, pero no los elimina por completo.
+
+### 7.2. Equidad y posibles sesgos
+
+Las variables relacionadas con la región, el sistema operativo y el tipo de tráfico pueden reflejar diferencias entre grupos de usuarios. Si el modelo presenta un rendimiento desigual entre visitantes nuevos y recurrentes, por ejemplo, algunas personas podrían recibir ofertas con menor frecuencia que otras.
+
+Por esta razón, se recomienda evaluar las métricas de precisión y recall por tipo de visitante y condición de fin de semana. Estas comprobaciones permitirían identificar diferencias de rendimiento antes de considerar un despliegue real. No se afirma que exista un sesgo demostrado, ya que sería necesario realizar dicha evaluación.
+
+### 7.3. Privacidad y uso responsable de los datos
+
+La información de navegación debe utilizarse únicamente para la finalidad prevista y de acuerdo con las políticas de privacidad aplicables. En una implementación real, sería necesario revisar qué datos se recopilan, cuánto tiempo se conservan, quién puede acceder a ellos y qué medidas de seguridad se aplican.
+
+Asimismo, se recomienda evitar la recopilación de información personal que no sea necesaria para la predicción y proteger los registros de las sesiones frente a accesos no autorizados.
+
+### 7.4. Supervisión humana y uso de los resultados
+
+Las predicciones deben considerarse estimaciones y no certezas sobre la intención de compra de una persona. El sistema puede servir como apoyo para las decisiones de marketing, pero no debería ser el único criterio para determinar qué usuarios reciben beneficios o descuentos.
+
+Si se detectan errores recurrentes, diferencias importantes entre grupos o una disminución del rendimiento, será necesario revisar el modelo y valorar si corresponde actualizarlo. La atención humana debe mantenerse disponible para resolver consultas, reclamaciones y situaciones que el sistema no pueda gestionar adecuadamente.
+
+En conclusión, el modelo constituye una herramienta de apoyo a la toma de decisiones. Su utilización responsable requiere verificar periódicamente su rendimiento, proteger los datos y reconocer sus limitaciones.
 
 +
 ## Declaración de uso de herramientas de IA
