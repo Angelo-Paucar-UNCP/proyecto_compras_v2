@@ -1,60 +1,32 @@
-
+import pytest
+from unittest.mock import patch
 import requests
+from src.chatbot import iniciar_conversacion
 
-from src import chatbot
+@patch('builtins.input', side_effect=['texto uno', 'texto dos', 'texto tres'])
+def test_deriva_despues_de_tres_intentos_invalidos(mock_input, capsys):
+    """Prueba que el fallback actúe tras 3 errores de tipeo y derive a humano."""
+    iniciar_conversacion()
+    captured = capsys.readouterr()
+    assert "TRANSFIRIENDO A UN ASESOR HUMANO EN VIVO" in captured.out
+    assert "Parece que estamos teniendo problemas de comunicación" in captured.out
 
+@patch('builtins.input', side_effect=['ayuda'])
+def test_palabra_ayuda_deriva_a_persona(mock_input, capsys):
+    """Prueba el camino alternativo donde el usuario pide ayuda en el primer turno."""
+    iniciar_conversacion()
+    captured = capsys.readouterr()
+    assert "TRANSFIRIENDO A UN ASESOR HUMANO EN VIVO" in captured.out
 
-def test_deriva_despues_de_tres_intentos_invalidos(monkeypatch, capsys):
-    respuestas = iter(["error", "error", "error"])
-    monkeypatch.setattr(
-        "builtins.input",
-        lambda mensaje: next(respuestas),
-    )
-
-    resultado = chatbot.solicitar_dato(
-        "Escribe un numero",
-        chatbot.parsear_entero,
-        "Respuesta invalida",
-    )
-
-    salida = capsys.readouterr().out
-
-    assert resultado == "DERIVAR"
-    assert salida.count("Respuesta invalida") == 3
-    assert "DERIVAR" == resultado
-
-
-def test_palabra_ayuda_deriva_a_persona(monkeypatch):
-    monkeypatch.setattr("builtins.input", lambda mensaje: "ayuda")
-
-    resultado = chatbot.solicitar_dato(
-        "Escribe un numero",
-        chatbot.parsear_entero,
-    )
-
-    assert resultado == "DERIVAR"
-
-
-def test_error_de_conexion_deriva_a_persona(
-    monkeypatch,
-    capsys,
-):
-    respuestas = iter(["nuevo", "5", "2", "no", "mayo"])
-    monkeypatch.setattr(
-        "builtins.input",
-        lambda mensaje: next(respuestas),
-    )
-    monkeypatch.setattr(chatbot.time, "sleep", lambda segundos: None)
-
-    def simular_error(*args, **kwargs):
-        raise requests.exceptions.ConnectionError(
-            "Error simulado para la prueba"
-        )
-
-    monkeypatch.setattr(chatbot.requests, "post", simular_error)
-
-    chatbot.iniciar_conversacion()
-    salida = capsys.readouterr().out
-
-    assert "No pude conectar con la API" in salida
-    assert "TRANSFERENCIA A UN ASESOR HUMANO" in salida
+@patch('builtins.input', side_effect=['5', '10'])
+@patch('requests.post')
+def test_error_de_conexion_deriva_a_persona(mock_post, mock_input, capsys):
+    """Prueba el camino de error cuando la API de FastAPI está caída."""
+    # Simulamos una caída del servidor
+    mock_post.side_effect = requests.exceptions.RequestException("Error de red")
+    
+    iniciar_conversacion()
+    captured = capsys.readouterr()
+    
+    assert "Ocurrió un inconveniente al conectar con el servidor interno" in captured.out
+    assert "TRANSFIRIENDO A UN ASESOR HUMANO EN VIVO" in captured.out
