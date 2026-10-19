@@ -1,8 +1,9 @@
 import os
+import json
 import pandas as pd
 import joblib
 
-DEFAULTS = {
+DEFAULTS_BASE = {
     'Administrative': 0, 'Administrative_Duration': 0.0,
     'Informational': 0, 'Informational_Duration': 0.0,
     'ProductRelated': 0, 'ProductRelated_Duration': 0.0,
@@ -11,6 +12,21 @@ DEFAULTS = {
     'Browser': 1, 'Region': 1, 'TrafficType': 1,
     'VisitorType': 'Returning_Visitor', 'Weekend': False,
 }
+try:
+    from .rutas import RUTA_DEFAULTS
+except ImportError:
+    from rutas import RUTA_DEFAULTS
+
+
+def cargar_defaults():
+    if RUTA_DEFAULTS.is_file():
+        with open(RUTA_DEFAULTS, encoding="utf-8") as archivo:
+            return json.load(archivo)
+    return DEFAULTS_BASE.copy()
+
+
+DEFAULTS = cargar_defaults()
+
 OBLIGATORIAS = ['ProductRelated', 'ProductRelated_Duration']
 MESES = {'Feb','Mar','May','June','Jul','Aug','Sep','Oct','Nov','Dec'}
 VISITANTES = {'Returning_Visitor','New_Visitor','Other'}

@@ -15,5 +15,5 @@
     "Region": 3.0,
     "TrafficType": 2.0,
     "VisitorType": "Returning_Visitor",
-    "Weekend": 0.0
+    "Weekend": false
 }
