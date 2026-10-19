@@ -1,10 +1,24 @@
-import os
+import sys
+from pathlib import Path
 
-print("Iniciando pipeline de entrenamiento completo...")
-# 1. Preparar datos
-os.system("python src/datos.py")
-# 2. Entrenar modelos
-os.system("python src/modelo.py")
-# 3. Evaluar y promover ganador
-os.system("python src/evaluacion.py")
-print("Pipeline finalizado. Revisa la carpeta 'modelos/'.")
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT / "src"))
+
+from datos import cargar_datos, guardar_artefactos_datos, preparar_y_dividir_datos
+from evaluacion import evaluar_y_promover
+from modelo import entrenar_lineas_base_y_redes, guardar_modelos
+
+
+def main():
+    print("Iniciando pipeline de entrenamiento...")
+    df = cargar_datos()
+    datos = preparar_y_dividir_datos(df)
+    guardar_artefactos_datos(datos)
+    modelos = entrenar_lineas_base_y_redes(datos["X_train"], datos["y_train"])
+    guardar_modelos(modelos)
+    evaluar_y_promover(datos, modelos)
+    print("Pipeline finalizado. Revisa la carpeta modelos/.")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,1 @@
+# Paquete del sistema de predicción de intención de compra.

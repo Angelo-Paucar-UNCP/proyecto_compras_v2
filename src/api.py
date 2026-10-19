@@ -1,59 +1,165 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import Dict, Any
-import joblib
-import pandas as pd
+
+import json
 import os
+import sys
+from typing import Any
 
-app = FastAPI(title="API de Predicción de Compras Online")
+import joblib
+import numpy as np
+from fastapi import FastAPI, HTTPException
 
-# Variables globales para cargar en memoria
+BASE_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..")
+)
+
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
+from src.preprocesamiento_api import transformar_entrada
+
+RUTA_MODELO = os.path.join(
+    BASE_DIR, "modelos", "modelo_produccion.pkl"
+)
+RUTA_PREPROCESADOR = os.path.join(
+    BASE_DIR, "modelos", "preprocesador.joblib"
+)
+RUTA_UMBRAL = os.path.join(
+    BASE_DIR, "modelos", "umbral.json"
+)
+
+app = FastAPI(
+    title="API REST - Intención de Compra en Línea",
+    version="1.1.0",
+)
+
 modelo = None
-preprocesador = None
+umbral = None
 
-@app.on_event("startup")
-def cargar_recursos():
-    global modelo, preprocesador
-    ruta_modelo = "modelos/modelo_produccion.pkl"
-    ruta_prep = "modelos/preprocesador.joblib"
-    
-    if not os.path.exists(ruta_modelo) or not os.path.exists(ruta_prep):
-        raise RuntimeError("Faltan los archivos del modelo o preprocesador en la carpeta 'modelos/'.")
-        
-    modelo = joblib.load(ruta_modelo)
-    preprocesador = joblib.load(ruta_prep)
 
-# 1. Endpoint de salud (Requisito estricto de la Etapa E5)
-@app.get("/health")
-def health_check():
-    return {"status": "activo", "modelo_cargado": modelo is not None}
+def cargar_artefactos():
+    global modelo, umbral
 
-# 2. Validación de entradas
-class CompraInput(BaseModel):
-    datos: Dict[str, Any]
+    if modelo is not None and umbral is not None:
+        return
 
-# 3. Endpoint de predicción
-@app.post("/predecir")
-def predecir_compra(entrada: CompraInput):
+    for ruta, nombre in (
+        (RUTA_MODELO, "modelo de producción"),
+        (RUTA_PREPROCESADOR, "preprocesador"),
+        (RUTA_UMBRAL, "configuración del umbral"),
+    ):
+        if not os.path.isfile(ruta):
+            raise HTTPException(
+                status_code=503,
+                detail=f"No se encontró el {nombre}.",
+            )
+
     try:
-        # Convertir el diccionario entrante a un DataFrame de Pandas (1 sola fila)
-        df_entrada = pd.DataFrame([entrada.datos])
-        
-        # Transformar los datos crudos usando el mismo preprocesador del entrenamiento
-        X_proc = preprocesador.transform(df_entrada)
-        
-        # Generar predicción y probabilidades
-        prediccion = modelo.predict(X_proc)[0]
-        probabilidades = modelo.predict_proba(X_proc)[0]
-        
-        return {
-            "prediccion": int(prediccion),
-            "probabilidad_compra": round(float(probabilidades[1]), 4),
-            "alerta": "Alta probabilidad de abandono" if prediccion == 0 else "Compra segura"
-        }
-    except Exception as e:
-        # 4. Errores claros con código 400 (Requisito estricto de la Etapa E5)
+        nuevo_modelo = joblib.load(RUTA_MODELO)
+
+        with open(RUTA_UMBRAL, encoding="utf-8") as archivo:
+            configuracion = json.load(archivo)
+
+        nuevo_umbral = float(configuracion["umbral"])
+
+        if not 0 < nuevo_umbral < 1:
+            raise ValueError("Umbral fuera del intervalo válido.")
+
+        modelo = nuevo_modelo
+        umbral = nuevo_umbral
+
+    except Exception as error:
         raise HTTPException(
-            status_code=400, 
-            detail=f"Error validando la entrada. Verifica que enviaste todas las columnas correctas. Detalles: {str(e)}"
+            status_code=503,
+            detail="No se pudieron cargar los artefactos de producción.",
+        ) from error
+
+
+@app.get("/")
+@app.get("/salud")
+@app.get("/health")
+def verificar_salud():
+    cargar_artefactos()
+
+    return {
+        "estado": "OK",
+        "status": "activo",
+        "servicio": "API REST Intención de Compra",
+        "modelo": os.path.basename(RUTA_MODELO),
+        "modelo_cargado": modelo is not None,
+        "preprocesador_disponible": os.path.isfile(RUTA_PREPROCESADOR),
+        "umbral": umbral,
+    }
+
+
+@app.post("/predict")
+@app.post("/predecir")
+def predecir(payload: dict[str, Any]):
+    cargar_artefactos()
+
+    if "datos" in payload:
+        datos = payload["datos"]
+        if not isinstance(datos, dict):
+            raise HTTPException(
+                status_code=400,
+                detail="El campo 'datos' debe ser un objeto.",
+            )
+    else:
+        datos = payload
+
+    try:
+        X_proc = transformar_entrada(
+            datos,
+            preprocessor_path=RUTA_PREPROCESADOR,
         )
+    except (ValueError, TypeError) as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        ) from error
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail="Error al preparar los datos de entrada.",
+        ) from error
+
+    try:
+        if hasattr(modelo, "predict_proba"):
+            probabilidades = np.asarray(
+                modelo.predict_proba(X_proc)
+            )
+            clases = list(getattr(modelo, "classes_", []))
+
+            indice = (
+                clases.index(1)
+                if 1 in clases
+                else probabilidades.shape[1] - 1
+            )
+
+            probabilidad = float(probabilidades[0, indice])
+            prediccion = int(probabilidad >= umbral)
+        else:
+            prediccion = int(
+                np.asarray(modelo.predict(X_proc)).ravel()[0]
+            )
+            probabilidad = float(prediccion)
+
+        return {
+            "prediccion": prediccion,
+            "probabilidad_compra": round(probabilidad, 4),
+            "mensaje": (
+                "Intención de compra ALTA"
+                if prediccion == 1
+                else "Intención de compra BAJA"
+            ),
+        }
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail="Error durante la predicción.",
+        ) from error
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="127.0.0.1", port=8001)

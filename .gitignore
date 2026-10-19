@@ -1,3 +1,9 @@
 .venv/
 __pycache__/
 *.csv
+.ipynb_checkpoints/
+*.pkl
+*.joblib
+.pytest_cache/
+*.py[cod]
+~$*.docx

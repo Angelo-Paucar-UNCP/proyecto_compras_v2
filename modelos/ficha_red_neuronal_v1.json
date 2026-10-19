@@ -1,7 +1,8 @@
 {
     "modelo": "red_neuronal_v1",
-    "fecha_creacion": "2026-10-17 17:03:13",
+    "fecha_creacion": "2026-10-18 18:46:35",
     "datos_entrenamiento": "Online Shoppers Intention (70% train, 15% val, 15% test)",
+    "umbral_decision": 0.21,
     "parametros": {
         "activation": "relu",
         "alpha": 0.0001,
@@ -16,7 +17,7 @@
         "learning_rate": "constant",
         "learning_rate_init": 0.001,
         "max_fun": 15000,
-        "max_iter": 300,
+        "max_iter": 400,
         "momentum": 0.9,
         "n_iter_no_change": 10,
         "nesterovs_momentum": true,
@@ -30,15 +31,10 @@
         "warm_start": false
     },
     "metricas_validacion": {
-        "f1_score": 0.572,
-        "precision": 0.6561,
-        "recall": 0.507,
-        "accuracy": 0.8826
-    },
-    "metricas_prueba": {
-        "f1_score": 0.6289,
-        "precision": 0.7124,
-        "recall": 0.5629,
-        "accuracy": 0.8973
+        "f1_score": 0.6104,
+        "precision": 0.5106,
+        "recall": 0.7587,
+        "accuracy": 0.8502,
+        "pr_auc": 0.6622
     }
 }
