@@ -1,112 +1,137 @@
-import requests
+import json
+import math
 import time
+import requests
+import os
+from pathlib import Path
 
-API_URL = "http://127.0.0.1:8000/predecir"
+# Ajuste de ruta para compatibilidad de ejecución
+RUTA_DEFAULTS = Path(__file__).parent.parent / "modelos" / "valores_por_defecto.json"
+API_URL = "http://127.0.0.1:8001/predecir"
 
-def solicitar_dato(mensaje, tipo_esperado=int, fallback="Disculpa, no entendí eso. ¿Podrías ingresar solo un número válido?"):
-    """
-    Recolecta datos paso a paso (slots) con validación de entradas 
-    y límite de reintentos (fallback).
-    """
+MAX_PAGINAS = 200
+MAX_MINUTOS = 240
+SEGUNDOS_MIN_POR_PAGINA = 6
+
+MESES_ES = {
+    "enero": "Jan", "febrero": "Feb", "marzo": "Mar", "abril": "Apr",
+    "mayo": "May", "junio": "June", "julio": "Jul", "agosto": "Aug", 
+    "septiembre": "Sep", "octubre": "Oct", "noviembre": "Nov", "diciembre": "Dec",
+    "may": "May"
+}
+
+def cargar_defaults():
+    if RUTA_DEFAULTS.exists():
+        with open(RUTA_DEFAULTS, encoding="utf-8") as archivo:
+            datos = json.load(archivo)
+        datos["Weekend"] = (datos.get("Weekend", False) is True or datos.get("Weekend", False) == 1)
+        return datos
+    return {
+        "Administrative": 0, "Administrative_Duration": 0.0, "Informational": 0,
+        "Informational_Duration": 0.0, "ProductRelated": 1, "ProductRelated_Duration": 0.0,
+        "BounceRates": 0.0, "ExitRates": 0.04, "PageValues": 0.0, "SpecialDay": 0.0,
+        "Month": "May", "OperatingSystems": 2, "Browser": 2, "Region": 1,
+        "TrafficType": 2, "VisitorType": "Returning_Visitor", "Weekend": False,
+    }
+
+def solicitar_dato(mensaje, parsear, fallback="Dato inválido. Intenta de nuevo."):
     intentos = 0
     while intentos < 3:
-        entrada = input(f"🤖 Asistente: {mensaje}\n👤 Tú: ")
-        
-        # Opción de salida o derivación humana directa
-        if entrada.strip().lower() in ['ayuda', 'humano', 'asesor', 'salir']:
-            return "DERIVAR"
-            
+        entrada = input(f"🤖 Sistema: {mensaje}\n👨‍💻 Vendedor: ")
+        if entrada.strip().lower() in {"salir", "cerrar", "cancelar", "ayuda"}:
+            return "CANCELAR"
         try:
-            valor = tipo_esperado(entrada)
-            return valor
-        except ValueError:
-            print(f"🤖 Asistente: {fallback}")
+            return parsear(entrada)
+        except (ValueError, TypeError):
+            print(f"⚠️ Sistema: {fallback}")
             intentos += 1
-            
-    print("\n🤖 Asistente: Parece que estamos teniendo problemas de comunicación. Te transferiré con un asesor humano para ayudarte mejor.")
-    return "DERIVAR"
+    print("🚨 Sistema: Demasiados errores. Abortando evaluación actual.")
+    return "CANCELAR"
 
-def derivar_a_humano():
-    """Simula la transferencia a un operador de soporte humano."""
-    print("\n" + "-"*60)
-    print("📞 TRANSFIRIENDO A UN ASESOR HUMANO EN VIVO...")
-    print("👩🏽‍💻 Asesor real: ¡Hola! Soy el asesor de ventas. ¿En qué te puedo colaborar hoy?")
-    print("-" * 60 + "\n")
+def parsear_entero(texto):
+    valor = int(texto.strip())
+    if not 1 <= valor <= MAX_PAGINAS: raise ValueError("Fuera de rango.")
+    return valor
 
-def iniciar_conversacion():
-    print("\n" + "="*60)
-    print("🤖 Asistente: ¡Hola! Bienvenid@ a nuestra tienda virtual.")
-    print("🤖 Asistente: Estoy aquí para ayudarte en tu compra.")
-    print("🤖 Asistente: (Recuerda que puedes escribir 'ayuda' en cualquier momento).")
-    print("="*60 + "\n")
+def minimo_minutos(paginas):
+    return max(0.5, paginas * SEGUNDOS_MIN_POR_PAGINA / 60)
+
+def crear_parser_minutos(paginas):
+    def parsear_minutos(texto):
+        valor = float(texto.strip().replace(",", "."))
+        if not math.isfinite(valor) or not minimo_minutos(paginas) <= valor <= MAX_MINUTOS:
+            raise ValueError("Fuera de rango.")
+        return valor
+    return parsear_minutos
+
+def parsear_visitante(texto):
+    texto = texto.strip().lower()
+    if texto in {"nuevo", "1"}: return "New_Visitor"
+    if texto in {"recurrente", "2"}: return "Returning_Visitor"
+    raise ValueError("Tipo inválido.")
+
+def parsear_mes(texto):
+    clave = texto.strip().lower()
+    if clave not in MESES_ES: raise ValueError("Mes no reconocido.")
+    return MESES_ES[clave]
+
+def evaluar_cliente():
+    print("\n" + "═" * 60)
+    print("🎯 PANEL DE LEAD SCORING - EVALUACIÓN DE SESIÓN EN VIVO")
+    print("═" * 60)
+
+    visitante = solicitar_dato("¿El cliente en línea es nuevo (1) o recurrente (2)?", parsear_visitante)
+    if visitante == "CANCELAR": return
     
-    # 1. Recolección de datos por pasos (Slots)
-    paginas_vistas = solicitar_dato("¿Cuántas páginas de productos has visitado hoy?")
-    if paginas_vistas == "DERIVAR":
-        derivar_a_humano()
-        return
-        
-    minutos = solicitar_dato("¿Aproximadamente cuántos minutos llevas navegando en nuestro sitio?", tipo_esperado=float)
-    if minutos == "DERIVAR":
-        derivar_a_humano()
-        return
-    
-    # 2. Estructura de datos alineada al preprocesador y modelo entrenado (UCI Shoppers)
-    datos_cliente = {
-        "Administrative": 0,
-        "Administrative_Duration": 0.0,
-        "Informational": 0,
-        "Informational_Duration": 0.0,
-        "ProductRelated": int(paginas_vistas),
-        "ProductRelated_Duration": float(minutos),
-        "BounceRates": 0.0,
-        "ExitRates": 0.0,
-        "PageValues": 0.0,
-        "SpecialDay": 0.0,
-        "Month": "Nov",
-        "OperatingSystems": 1,
-        "Browser": 1,
-        "Region": 1,
-        "TrafficType": 1,
-        "VisitorType": "Returning_Visitor",
-        "Weekend": False
-    }
-    
-    print("\n🤖 Asistente: Consultando el estado de tu sesión...")
+    paginas = solicitar_dato("¿Cuántas páginas de producto ha visitado en esta sesión?", parsear_entero)
+    if paginas == "CANCELAR": return
+
+    minutos = solicitar_dato("¿Cuántos minutos lleva activo?", crear_parser_minutos(paginas))
+    if minutos == "CANCELAR": return
+
+    mes = solicitar_dato("¿Mes actual de la sesión? (ej. mayo, noviembre)", parsear_mes)
+    if mes == "CANCELAR": return
+
+    datos_cliente = cargar_defaults()
+    datos_cliente.update({
+        "VisitorType": visitante, "ProductRelated": paginas,
+        "ProductRelated_Duration": minutos * 60.0, "Month": mes,
+    })
+
+    print("\n⏳ Sistema: Consultando al modelo predictivo...")
     time.sleep(1)
-    
-    # 3. Consulta a la API
+
     try:
-        respuesta = requests.post(API_URL, json={"datos": datos_cliente}, timeout=5)
-        
+        respuesta = requests.post(API_URL, json={"datos": datos_cliente}, timeout=10)
         if respuesta.status_code == 200:
             resultado = respuesta.json()
             prediccion = resultado.get("prediccion")
+            prob = resultado.get("probabilidad_compra", 0.0)
+
+            print(f"\n📊 Probabilidad de compra: {prob:.2%}")
             
-            # Lógica de Lead Scoring e Intervención Proactiva
-            if prediccion == 0 and float(minutos) > 5.0:
-                print("🤖 Asistente: Veo que llevas un buen rato explorando nuestros productos. ¡Tengo una excelente noticia!")
-                print("🤖 Asistente: Te he otorgado un cupón exclusivo del 15% de descuento en tu carrito si completas tu pedido ahora.")
-                
-                # Novedad: Ahora sí espera tu respuesta
-                respuesta_usuario = input("🤖 Asistente: ¿Deseas que te transfiera con un asesor para aplicar el cupón? (sí/no)\n👤 Tú: ").strip().lower()
-                
-                if respuesta_usuario in ['si', 'sí', 's', 'yes', 'claro']:
-                    derivar_a_humano()
-                else:
-                    print("🤖 Asistente: Entendido. ¡El cupón quedará guardado por si cambias de opinión! Sigue disfrutando de nuestra tienda. ¡Hasta pronto!")
-                    
+            if prediccion == 1:
+                print("🟢 ESTADO: COMPRA ORGÁNICA ASEGURADA.")
+                print("🛑 ACCIÓN AUTOMÁTICA: No hacer nada. Pasando de largo para proteger el margen de ganancia.")
             elif prediccion == 0:
-                print("🤖 Asistente: ¿Buscas algún producto en especial? Te invito a revisar nuestras promociones destacadas.")
+                print("🔴 ESTADO: RIESGO DE ABANDONO DETECTADO.")
+                print("🎁 ACCIÓN AUTOMÁTICA: Disparando popup con cupón de 15% de descuento para retener la venta.")
             else:
-                print("🤖 Asistente: ¡Genial! Tus productos seleccionados tienen excelente disponibilidad. ¿Te ayudo a dirigirte a la pasarela de pago?")
+                print("⚠️ Sistema: Error en la salida del modelo.")
+
         else:
-            print(f"🤖 Asistente: No pude verificar tu carrito correctamente (Código HTTP {respuesta.status_code}).")
-            derivar_a_humano()
-            
-    except requests.exceptions.RequestException:
-        print("🤖 Asistente: Ocurrió un inconveniente al conectar con el servidor interno.")
-        derivar_a_humano()
+            print(f"⚠️ Sistema: Fallo en API (HTTP {respuesta.status_code}). Detalle: {respuesta.text}")
+    except requests.exceptions.RequestException as error:
+        print("❌ Sistema: Servidor API inalcanzable. Verifique que uvicorn esté corriendo en el puerto 8001.")
+
+def iniciar_panel():
+    while True:
+        evaluar_cliente()
+        print("\n" + "─" * 60)
+        continuar = input("▶️ ¿Deseas evaluar a otro cliente en la fila? (sí/no): ").strip().lower()
+        if continuar not in ['si', 'sí', 's', 'yes']:
+            print("Cerrando panel de Lead Scoring. ¡Buen turno de ventas!")
+            break
 
 if __name__ == "__main__":
-    iniciar_conversacion()
+    iniciar_panel()

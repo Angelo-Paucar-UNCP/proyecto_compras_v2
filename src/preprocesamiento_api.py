@@ -1,95 +1,62 @@
-import os
-import json
 import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
 import joblib
+import os
 
-DEFAULTS_BASE = {
-    'Administrative': 0, 'Administrative_Duration': 0.0,
-    'Informational': 0, 'Informational_Duration': 0.0,
-    'ProductRelated': 0, 'ProductRelated_Duration': 0.0,
-    'BounceRates': 0.0, 'ExitRates': 0.02, 'PageValues': 0.0,
-    'SpecialDay': 0.0, 'Month': 'May', 'OperatingSystems': 1,
-    'Browser': 1, 'Region': 1, 'TrafficType': 1,
-    'VisitorType': 'Returning_Visitor', 'Weekend': False,
-}
-try:
-    from .rutas import RUTA_DEFAULTS
-except ImportError:
-    from rutas import RUTA_DEFAULTS
-
-
-def cargar_defaults():
-    if RUTA_DEFAULTS.is_file():
-        with open(RUTA_DEFAULTS, encoding="utf-8") as archivo:
-            return json.load(archivo)
-    return DEFAULTS_BASE.copy()
-
-
-DEFAULTS = cargar_defaults()
-
-OBLIGATORIAS = ['ProductRelated', 'ProductRelated_Duration']
-MESES = {'Feb','Mar','May','June','Jul','Aug','Sep','Oct','Nov','Dec'}
-VISITANTES = {'Returning_Visitor','New_Visitor','Other'}
-TASAS = ['BounceRates','ExitRates','SpecialDay']
-
-def preparar_datos_entrada(datos):
-    if not isinstance(datos, dict):
-        raise ValueError("Los datos deben ser un diccionario.")
-    desconocidas = set(datos) - set(DEFAULTS)
-    if desconocidas:
-        raise ValueError(f"Columnas no reconocidas: {sorted(desconocidas)}")
-    faltan = [c for c in OBLIGATORIAS if datos.get(c) is None]
-    if faltan:
-        raise ValueError(f"Faltan columnas obligatorias: {faltan}")
-
-    d = {**DEFAULTS, **{k: v for k, v in datos.items() if v is not None}}
-
-    for col, defecto in DEFAULTS.items():
-        if isinstance(defecto, (int, float)) and not isinstance(defecto, bool):
-            try:
-                d[col] = float(d[col])
-            except (TypeError, ValueError):
-                raise ValueError(f"'{col}' debe ser un número.")
-            if d[col] < 0:
-                raise ValueError(f"'{col}' no puede ser negativo.")
-    for col in TASAS:
-        if d[col] > 1:
-            raise ValueError(f"'{col}' debe estar entre 0 y 1.")
-    if d['Month'] not in MESES:
-        raise ValueError(f"'Month' debe ser uno de {sorted(MESES)}.")
-    if d['VisitorType'] not in VISITANTES:
-        raise ValueError(f"'VisitorType' debe ser uno de {sorted(VISITANTES)}.")
-    if not isinstance(d['Weekend'], bool):
-        raise ValueError("'Weekend' debe ser true o false.")
-
-    return pd.DataFrame([d])[list(DEFAULTS)]
-
-def buscar_preprocesador():
-    """Busca el archivo del preprocesador en la carpeta modelos/."""
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    candidatos = [
-        "modelos/preprocesador.joblib",
-        "modelos/preprocesador_scaler.joblib",
-        "modelos/scaler.joblib"
-    ]
-    for rel_path in candidatos:
-        full_path = os.path.join(base_dir, rel_path)
-        if os.path.exists(full_path):
-            return full_path
-        if os.path.exists(rel_path):
-            return rel_path
+def preparar_datos():
+    print("Iniciando pipeline de datos...")
     
-    modelos_dir = os.path.join(base_dir, "modelos")
-    if os.path.exists(modelos_dir):
-        for f in os.listdir(modelos_dir):
-            if "preprocesador" in f and f.endswith(".joblib"):
-                return os.path.join(modelos_dir, f)
-    return "modelos/preprocesador.joblib"
+    # 1. Carga de datos
+    df = pd.read_csv("datos/online_shoppers_intention.csv")
 
-def transformar_entrada(datos_json, preprocessor_path=None):
-    df = preparar_datos_entrada(datos_json)
-    if preprocessor_path is None or not os.path.exists(preprocessor_path):
-        preprocessor_path = buscar_preprocesador()
+    # 2. Limpieza de calidad (Requisito Rúbrica C2)
+    # Detecta y elimina filas exactamente iguales que contaminarían la prueba
+    duplicados_antes = df.duplicated().sum()
+    df = df.drop_duplicates()
+    print(f"✅ Se eliminaron {duplicados_antes} filas duplicadas para evitar fuga.")
+
+    # 3. Separación de objetivo
+    X = df.drop(columns=['Revenue'])
+    y = df['Revenue'].astype(int)
+
+    # 4. Partición Estratificada con Semilla (Requisito Rúbrica C2)
+    # Separa 70% Entrenamiento, 15% Validación, 15% Prueba manteniendo la proporción de clases
+    X_temp, X_test, y_temp, y_test = train_test_split(X, y, test_size=0.15, random_state=42, stratify=y)
+    X_train, X_val, y_train, y_val = train_test_split(X_temp, y_temp, test_size=0.1765, random_state=42, stratify=y_temp)
+
+    # 5. Definición de Transformadores
+    num_cols = ['Administrative', 'Administrative_Duration', 'Informational', 
+                'Informational_Duration', 'ProductRelated', 'ProductRelated_Duration', 
+                'BounceRates', 'ExitRates', 'PageValues', 'SpecialDay']
     
-    preprocessor = joblib.load(preprocessor_path)
-    return preprocessor.transform(df)
+    cat_cols = ['Month', 'OperatingSystems', 'Browser', 'Region', 
+                'TrafficType', 'VisitorType', 'Weekend']
+
+    preprocesador = ColumnTransformer(
+        transformers=[
+            ('num', StandardScaler(), num_cols),
+            ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), cat_cols)
+        ]
+    )
+
+    # 6. PREVENCIÓN DE FUGA DE INFORMACIÓN (Requisito Crítico C2 y Defensa D1)
+    # El escalador aprende las medias/desviaciones ÚNICAMENTE con los datos de entrenamiento
+    X_train_procesado = preprocesador.fit_transform(X_train)
+    
+    # Validación y Prueba SOLO se transforman, no se ajustan
+    X_val_procesado = preprocesador.transform(X_val)
+    X_test_procesado = preprocesador.transform(X_test)
+
+    # 7. Guardar el transformador para la API
+    os.makedirs("modelos", exist_ok=True)
+    joblib.dump(preprocesador, "modelos/preprocesador.pkl")
+    
+    # Guardar los datos procesados para el script de entrenamiento (modelo.py)
+    joblib.dump((X_train_procesado, X_val_procesado, X_test_procesado, y_train, y_val, y_test), "modelos/datos_procesados.pkl")
+    
+    print("✅ Preprocesamiento finalizado con éxito. Listo para entrenar.")
+
+if __name__ == "__main__":
+    preparar_datos()

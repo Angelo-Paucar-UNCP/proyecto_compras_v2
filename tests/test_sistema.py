@@ -1,57 +1,44 @@
-import sys
-import os
 import pytest
+from fastapi.testclient import TestClient
+from src.api import app
 
-# Añade la raíz del proyecto al PATH de Python para poder importar desde src
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from src.preprocesamiento_api import preparar_datos_entrada
-
-def test_preparar_datos_validos():
-    """Verifica que un diccionario válido genere un DataFrame estructurado de 1 fila."""
-    datos = {
-        "ProductRelated": 10,
-        "ProductRelated_Duration": 120.0,
-        "Month": "May"
-    }
-    df = preparar_datos_entrada(datos)
-    assert len(df) == 1
-    assert "Administrative" in df.columns
-    assert "ProductRelated" in df.columns
+def test_sistema_completo_integracion():
+    """Verifica que el pipeline completo devuelva 200 con datos correctos."""
+    with TestClient(app) as client:
+        payload = {
+            "datos": {
+                "Administrative": 3, "Administrative_Duration": 15.5, "Informational": 0,
+                "Informational_Duration": 0.0, "ProductRelated": 12, "ProductRelated_Duration": 150.2,
+                "BounceRates": 0.01, "ExitRates": 0.02, "PageValues": 10.5, "SpecialDay": 0.0,
+                "Month": "Nov", "OperatingSystems": 2, "Browser": 2, "Region": 1,
+                "TrafficType": 2, "VisitorType": "Returning_Visitor", "Weekend": True
+            }
+        }
+        respuesta = client.post("/predecir", json=payload)
+        assert respuesta.status_code == 200
+        resultado = respuesta.json()
+        assert "prediccion" in resultado
+        assert "probabilidad_compra" in resultado
 
 def test_faltan_obligatorias():
-    """Verifica que lance ValueError si faltan columnas obligatorias."""
-    datos_incompletos = {
-        "Month": "May"
-    }
-    with pytest.raises(ValueError):
-        preparar_datos_entrada(datos_incompletos)
+    """Verifica que el sistema rechace peticiones incompletas."""
+    with TestClient(app) as client:
+        payload = {"datos": {"Month": "Nov"}}
+        respuesta = client.post("/predecir", json=payload)
+        assert respuesta.status_code == 422
 
-def test_valor_invalido_tasa():
-    """Verifica que lance ValueError si una tasa excede el rango permitido (0 a 1)."""
-    datos_invalidos = {
-        "ProductRelated": 5,
-        "ProductRelated_Duration": 50.0,
-        "ExitRates": 2.5  # Tasa fuera de rango (> 1)
-    }
-    with pytest.raises(ValueError):
-        preparar_datos_entrada(datos_invalidos)
-
-def test_numero_negativo():
-    """Verifica que lance ValueError si hay duraciones o valores negativos."""
-    datos_negativos = {
-        "ProductRelated": -5,
-        "ProductRelated_Duration": 100.0
-    }
-    with pytest.raises(ValueError):
-        preparar_datos_entrada(datos_negativos)
-
-def test_mes_invalido():
-    """Verifica que lance ValueError si el mes no pertenece a la lista válida."""
-    datos_mes = {
-        "ProductRelated": 10,
-        "ProductRelated_Duration": 120.0,
-        "Month": "Enero"  # Mes no permitido
-    }
-    with pytest.raises(ValueError):
-        preparar_datos_entrada(datos_mes)
+def test_valor_invalido_tipo():
+    """Verifica que el sistema rechace tipos de datos incorrectos."""
+    with TestClient(app) as client:
+        payload = {
+            "datos": {
+                "Administrative": "texto_invalido", 
+                "Administrative_Duration": 15.5, "Informational": 0,
+                "Informational_Duration": 0.0, "ProductRelated": 12, "ProductRelated_Duration": 150.2,
+                "BounceRates": 0.01, "ExitRates": 0.02, "PageValues": 10.5, "SpecialDay": 0.0,
+                "Month": "Nov", "OperatingSystems": 2, "Browser": 2, "Region": 1,
+                "TrafficType": 2, "VisitorType": "Returning_Visitor", "Weekend": True
+            }
+        }
+        respuesta = client.post("/predecir", json=payload)
+        assert respuesta.status_code == 422

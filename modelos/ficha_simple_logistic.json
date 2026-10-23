@@ -1,36 +1,10 @@
 {
     "modelo": "simple_logistic",
-    "fecha_creacion": "2026-10-19 13:06:31",
-    "datos_entrenamiento": "Online Shoppers Intention (70% train, 15% val, 15% test)",
-    "umbral_decision": 0.55,
-    "parametros": {
-        "C": 1.0,
-        "class_weight": "balanced",
-        "dual": false,
-        "fit_intercept": true,
-        "intercept_scaling": 1,
-        "l1_ratio": 0.0,
-        "max_iter": 2000,
-        "n_jobs": null,
-        "penalty": "deprecated",
-        "random_state": 42,
-        "solver": "lbfgs",
-        "tol": 0.0001,
-        "verbose": 0,
-        "warm_start": false
-    },
+    "fecha": "2026-10-22 18:18:50",
     "metricas_validacion": {
-        "f1_score": 0.6309,
-        "precision": 0.5747,
-        "recall": 0.6993,
-        "accuracy": 0.8734,
-        "pr_auc": 0.6394
-    },
-    "metricas_prueba": {
-        "f1_score": 0.6396,
-        "precision": 0.5775,
-        "recall": 0.7168,
-        "accuracy": 0.8751,
-        "pr_auc": 0.6219
+        "accuracy": 0.8684497816593887,
+        "precision": 0.6380368098159509,
+        "recall": 0.36363636363636365,
+        "f1_score": 0.46325167037861914
     }
 }

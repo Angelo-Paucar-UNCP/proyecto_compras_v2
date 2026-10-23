@@ -1,18 +1,10 @@
 {
     "modelo": "trivial",
-    "fecha_creacion": "2026-10-19 13:06:31",
-    "datos_entrenamiento": "Online Shoppers Intention (70% train, 15% val, 15% test)",
-    "umbral_decision": 0.1,
-    "parametros": {
-        "constant": null,
-        "random_state": 42,
-        "strategy": "most_frequent"
-    },
+    "fecha": "2026-10-22 18:18:50",
     "metricas_validacion": {
-        "f1_score": 0.0,
+        "accuracy": 0.8438864628820961,
         "precision": 0.0,
         "recall": 0.0,
-        "accuracy": 0.8453,
-        "pr_auc": 0.1547
+        "f1_score": 0.0
     }
 }

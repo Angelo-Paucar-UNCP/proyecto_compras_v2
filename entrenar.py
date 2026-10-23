@@ -1,24 +1,30 @@
+import subprocess
 import sys
-from pathlib import Path
+import os
 
-ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT / "src"))
-
-from datos import cargar_datos, guardar_artefactos_datos, preparar_y_dividir_datos
-from evaluacion import evaluar_y_promover
-from modelo import entrenar_lineas_base_y_redes, guardar_modelos
-
+def ejecutar_script(ruta_script, descripcion):
+    print(f"\n{'-'*60}\n🚀 Ejecutando: {descripcion} ({ruta_script})\n{'-'*60}")
+    if not os.path.exists(ruta_script):
+        print(f"❌ Error: No se encontró el archivo '{ruta_script}'.")
+        sys.exit(1)
+    
+    resultado = subprocess.run([sys.executable, ruta_script])
+    if resultado.returncode != 0:
+        print(f"❌ Error crítico al ejecutar {ruta_script}. Abortando pipeline.")
+        sys.exit(1)
+    else:
+        print(f"✅ {descripcion} completado con éxito.")
 
 def main():
-    print("Iniciando pipeline de entrenamiento...")
-    df = cargar_datos()
-    datos = preparar_y_dividir_datos(df)
-    guardar_artefactos_datos(datos)
-    modelos = entrenar_lineas_base_y_redes(datos["X_train"], datos["y_train"])
-    guardar_modelos(modelos)
-    evaluar_y_promover(datos, modelos)
-    print("Pipeline finalizado. Revisa la carpeta modelos/.")
-
+    print("\n" + "="*60 + "\n⚙️ INICIANDO PIPELINE DE ENTRENAMIENTO COMPLETO (B2B)\n" + "="*60)
+    
+    ejecutar_script("src/datos.py", "Fase 1: Preparación de datos y prevención de fuga")
+    ejecutar_script("src/modelo.py", "Fase 2: Entrenamiento iterativo de modelos")
+    ejecutar_script("src/evaluacion.py", "Fase 3: Evaluación y promoción del modelo ganador")
+    
+    print("\n" + "="*60 + "\n🎉 PIPELINE FINALIZADO CORRECTAMENTE.")
+    print("Todos los artefactos están listos en la carpeta 'modelos/'.")
+    print("👉 Ya puedes levantar la API con: uvicorn src.api:app --port 8001 --reload\n" + "="*60)
 
 if __name__ == "__main__":
     main()

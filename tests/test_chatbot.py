@@ -1,32 +1,29 @@
 import pytest
 from unittest.mock import patch
 import requests
-from src.chatbot import iniciar_conversacion
+from src.chatbot import evaluar_cliente
 
-@patch('builtins.input', side_effect=['texto uno', 'texto dos', 'texto tres'])
+@patch('builtins.input', side_effect=['invalido', 'invalido', 'invalido'])
 def test_deriva_despues_de_tres_intentos_invalidos(mock_input, capsys):
-    """Prueba que el fallback actúe tras 3 errores de tipeo y derive a humano."""
-    iniciar_conversacion()
+    """Prueba que el fallback aborte tras 3 errores."""
+    evaluar_cliente()
     captured = capsys.readouterr()
-    assert "TRANSFIRIENDO A UN ASESOR HUMANO EN VIVO" in captured.out
-    assert "Parece que estamos teniendo problemas de comunicación" in captured.out
+    assert "Demasiados errores. Abortando evaluación actual." in captured.out
 
 @patch('builtins.input', side_effect=['ayuda'])
-def test_palabra_ayuda_deriva_a_persona(mock_input, capsys):
-    """Prueba el camino alternativo donde el usuario pide ayuda en el primer turno."""
-    iniciar_conversacion()
+def test_palabra_ayuda_cancela_proceso(mock_input, capsys):
+    """Prueba el camino alternativo donde el vendedor cancela."""
+    evaluar_cliente()
+    # Si ingresa "ayuda", la función evalúa cliente retorna silenciosamente (CANCELAR)
+    # Por lo tanto, no debería llegar al mensaje de la API.
     captured = capsys.readouterr()
-    assert "TRANSFIRIENDO A UN ASESOR HUMANO EN VIVO" in captured.out
+    assert "Consultando al modelo predictivo..." not in captured.out
 
-@patch('builtins.input', side_effect=['5', '10'])
+@patch('builtins.input', side_effect=['1', '5', '10', 'mayo'])
 @patch('requests.post')
-def test_error_de_conexion_deriva_a_persona(mock_post, mock_input, capsys):
+def test_error_de_conexion_api(mock_post, mock_input, capsys):
     """Prueba el camino de error cuando la API de FastAPI está caída."""
-    # Simulamos una caída del servidor
     mock_post.side_effect = requests.exceptions.RequestException("Error de red")
-    
-    iniciar_conversacion()
+    evaluar_cliente()
     captured = capsys.readouterr()
-    
-    assert "Ocurrió un inconveniente al conectar con el servidor interno" in captured.out
-    assert "TRANSFIRIENDO A UN ASESOR HUMANO EN VIVO" in captured.out
+    assert "Servidor API inalcanzable" in captured.out
